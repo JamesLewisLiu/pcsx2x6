@@ -56,6 +56,17 @@ enum class FightingLayout {
 #define JVS_WHEEL_CHANNEL_MAX 3
 #define JVS_DRUM_CHANNEL_MAX 8
 
+enum JVSDrumChannel : u16 {
+	JVS_DRUM_CHANNEL_1P_DL = 0, // Player 1 Don Left / left men
+	JVS_DRUM_CHANNEL_1P_KL,     // Player 1 Ka Left / left fuchi
+	JVS_DRUM_CHANNEL_1P_DR,     // Player 1 Don Right / right men
+	JVS_DRUM_CHANNEL_1P_KR,     // Player 1 Ka Right / right fuchi
+	JVS_DRUM_CHANNEL_2P_DL,     // Player 2 Don Left / left men
+	JVS_DRUM_CHANNEL_2P_KL,     // Player 2 Ka Left / left fuchi
+	JVS_DRUM_CHANNEL_2P_DR,     // Player 2 Don Right / right men
+	JVS_DRUM_CHANNEL_2P_KR,     // Player 2 Ka Right / right fuchi
+};
+
 struct GunMapping {
     u16 pedal;
     u16 sensor;
