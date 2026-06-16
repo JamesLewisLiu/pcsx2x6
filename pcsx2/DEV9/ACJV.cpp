@@ -109,6 +109,24 @@ static constexpr const std::array<InputBindingInfo, 12> s_jvs_p2_button_bindings
 	{"P2_Service", TRANSLATE_NOOP("JVS", "P2 Service"),  nullptr, InputBindingInfo::Type::Button, JVS_BTN_SERVICE, GenericInputBinding::Select},
 }};
 
+static constexpr const std::array<InputBindingInfo, 6> s_jvs_p1_drum_bindings = {{
+	{"P1_DrumDonLeft",  TRANSLATE_NOOP("JVS", "P1 Drum Don Left (Men)"),   nullptr, InputBindingInfo::Type::Button, JVS_DRUM_CHANNEL_1P_DL, GenericInputBinding::L1},
+	{"P1_DrumKaLeft",   TRANSLATE_NOOP("JVS", "P1 Drum Ka Left (Fuchi)"),   nullptr, InputBindingInfo::Type::Button, JVS_DRUM_CHANNEL_1P_KL, GenericInputBinding::L2},
+	{"P1_DrumDonRight", TRANSLATE_NOOP("JVS", "P1 Drum Don Right (Men)"),  nullptr, InputBindingInfo::Type::Button, JVS_DRUM_CHANNEL_1P_DR, GenericInputBinding::R1},
+	{"P1_DrumKaRight",  TRANSLATE_NOOP("JVS", "P1 Drum Ka Right (Fuchi)"), nullptr, InputBindingInfo::Type::Button, JVS_DRUM_CHANNEL_1P_KR, GenericInputBinding::R2},
+	{"P1_Start",        TRANSLATE_NOOP("JVS", "P1 Start"),                 nullptr, InputBindingInfo::Type::Button, JVS_BTN_START,          GenericInputBinding::Start},
+	{"P1_Service",      TRANSLATE_NOOP("JVS", "P1 Service"),               nullptr, InputBindingInfo::Type::Button, JVS_BTN_SERVICE,        GenericInputBinding::Select},
+}};
+
+static constexpr const std::array<InputBindingInfo, 6> s_jvs_p2_drum_bindings = {{
+	{"P2_DrumDonLeft",  TRANSLATE_NOOP("JVS", "P2 Drum Don Left (Men)"),   nullptr, InputBindingInfo::Type::Button, JVS_DRUM_CHANNEL_2P_DL, GenericInputBinding::L1},
+	{"P2_DrumKaLeft",   TRANSLATE_NOOP("JVS", "P2 Drum Ka Left (Fuchi)"),   nullptr, InputBindingInfo::Type::Button, JVS_DRUM_CHANNEL_2P_KL, GenericInputBinding::L2},
+	{"P2_DrumDonRight", TRANSLATE_NOOP("JVS", "P2 Drum Don Right (Men)"),  nullptr, InputBindingInfo::Type::Button, JVS_DRUM_CHANNEL_2P_DR, GenericInputBinding::R1},
+	{"P2_DrumKaRight",  TRANSLATE_NOOP("JVS", "P2 Drum Ka Right (Fuchi)"), nullptr, InputBindingInfo::Type::Button, JVS_DRUM_CHANNEL_2P_KR, GenericInputBinding::R2},
+	{"P2_Start",        TRANSLATE_NOOP("JVS", "P2 Start"),                 nullptr, InputBindingInfo::Type::Button, JVS_BTN_START,          GenericInputBinding::Start},
+	{"P2_Service",      TRANSLATE_NOOP("JVS", "P2 Service"),               nullptr, InputBindingInfo::Type::Button, JVS_BTN_SERVICE,        GenericInputBinding::Select},
+}};
+
 // Per-layout face button default inputs (BTN1-6), mirroring each game's
 // official PS2 port pad. Some games share the same layout. Rows follow FightingLayout order.
 static constexpr GenericInputBinding s_fighting_face_buttons[][6] = {
@@ -204,6 +222,8 @@ static JVS_MODE m_jvsMode = JVS_MODE::DEFAULT;
 
 std::span<const InputBindingInfo> ACJV::GetButtonBindings()
 {
+	if (m_jvsMode == JVS_MODE::DRUM)
+		return s_jvs_p1_drum_bindings;
 	if (m_jvsMode == JVS_MODE::FIGHTING)
 		return s_active_p1_bindings;
 	return s_jvs_p1_button_bindings;
@@ -211,6 +231,8 @@ std::span<const InputBindingInfo> ACJV::GetButtonBindings()
 
 std::span<const InputBindingInfo> ACJV::GetP2ButtonBindings()
 {
+	if (m_jvsMode == JVS_MODE::DRUM)
+		return s_jvs_p2_drum_bindings;
 	if (m_jvsMode == JVS_MODE::FIGHTING)
 		return s_active_p2_bindings;
 	return s_jvs_p2_button_bindings;
@@ -283,6 +305,10 @@ void ACJV::CopyConfiguration(SettingsInterface* dest_si, const SettingsInterface
 			dest_si->CopyStringListValue(src_si, CONFIG_SECTION, bi.name);
 		for (const InputBindingInfo& bi : s_jvs_p2_button_bindings)
 			dest_si->CopyStringListValue(src_si, CONFIG_SECTION, bi.name);
+		for (const InputBindingInfo& bi : s_jvs_p1_drum_bindings)
+			dest_si->CopyStringListValue(src_si, CONFIG_SECTION, bi.name);
+		for (const InputBindingInfo& bi : s_jvs_p2_drum_bindings)
+			dest_si->CopyStringListValue(src_si, CONFIG_SECTION, bi.name);
 		for (const InputBindingInfo& bi : s_jvs_coin_bindings)
 			dest_si->CopyStringListValue(src_si, CONFIG_SECTION, bi.name);
 	}
@@ -334,6 +360,11 @@ static float m_jvsLightgunDX = -1.0f;  // normalized display X (-1 = off-screen)
 static float m_jvsLightgunDY = -1.0f;  // normalized display Y (-1 = off-screen)
 static u16 m_jvsWheelChannels[JVS_WHEEL_CHANNEL_MAX] = {};
 static u16 m_jvsDrumChannels[JVS_DRUM_CHANNEL_MAX] = {};
+static bool m_jvsDrumPressed[JVS_DRUM_CHANNEL_MAX] = {};
+static u8 m_jvsDrumPulseReads[JVS_DRUM_CHANNEL_MAX] = {};
+
+static constexpr u8 JVS_DRUM_PULSE_READS = 3;
+static constexpr u16 JVS_DRUM_PRESS_VALUE = 0x3FF << 6; // 10-bit max value, left-aligned in JVS' 16-bit analog word.
 
 // Per-game JVS button mapping for lightgun games, keyed by NM game ID (see issue #9).
 // Field order: pedal, sensor, sensor_active_high, p1_start, p2_start, p1_trigger, p2_trigger
@@ -376,6 +407,23 @@ void ACJV::SetButtonState(u32 player, u16 mask, bool pressed)
 {
 	if (player >= JVS_PLAYER_COUNT)
 		return;
+
+	if (m_jvsMode == JVS_MODE::DRUM && mask < JVS_DRUM_CHANNEL_MAX)
+	{
+		// Taiko drum inputs are hits, not level-sensitive buttons. Input backends
+		// can deliver fast press/release pairs between two JVS polls, especially
+		// during rolls or simultaneous left/right hits. Latch each rising edge for
+		// a few analog reads so the game cannot miss it, but keep each channel
+		// independent so left/right Don or Ka can be hit together.
+		if (pressed && !m_jvsDrumPressed[mask])
+		{
+			m_jvsDrumChannels[mask] = JVS_DRUM_PRESS_VALUE;
+			m_jvsDrumPulseReads[mask] = JVS_DRUM_PULSE_READS;
+		}
+		m_jvsDrumPressed[mask] = pressed;
+		return;
+	}
+
 	if (pressed)
 		m_jvsButtonState[player] |= mask;
 	else
@@ -441,6 +489,8 @@ void ACJV::SetGameId(const std::string& gameid)
 	m_jvsLightgunDY = -1.0f;
 	std::memset(m_jvsWheelChannels, 0, sizeof(m_jvsWheelChannels));
 	std::memset(m_jvsDrumChannels, 0, sizeof(m_jvsDrumChannels));
+	std::memset(m_jvsDrumPressed, 0, sizeof(m_jvsDrumPressed));
+	std::memset(m_jvsDrumPulseReads, 0, sizeof(m_jvsDrumPulseReads));
 
 	// Select per-game gun mapping, or fall back to default
 	auto it = s_gun_mappings.find(gameid);
@@ -611,8 +661,6 @@ void do_jvs_packet(const u8* input, u8* output) {
 
 				(*dstSize) += 12;
 			}
-			// TODO: drum games (e.g. Taiko no Tatsujin)
-#if 0
 			else if(m_jvsMode == JVS_MODE::DRUM)
 			{
 				(*output++) = 0x03;                 //Analog Input
@@ -622,7 +670,6 @@ void do_jvs_packet(const u8* input, u8* output) {
 
 				(*dstSize) += 4;
 			}
-#endif
 			// TODO: touch panel games
 #if 0
 			else if(m_jvsMode == JVS_MODE::TOUCH)
@@ -776,6 +823,12 @@ void do_jvs_packet(const u8* input, u8* output) {
 				{
 					(*output++) = static_cast<u8>(m_jvsDrumChannels[i] >> 8);
 					(*output++) = static_cast<u8>(m_jvsDrumChannels[i]);
+					if (m_jvsDrumPulseReads[i] > 0)
+					{
+						m_jvsDrumPulseReads[i]--;
+						if (m_jvsDrumPulseReads[i] == 0)
+							m_jvsDrumChannels[i] = 0;
+					}
 				}
 			}
 			else if(m_jvsMode == JVS_MODE::DRIVE)
