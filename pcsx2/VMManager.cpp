@@ -1395,20 +1395,7 @@ bool VMManager::AutoDetectSource(const std::string& filename, Error* error)
 					else if (jvsmode == "drum")
 					{
 						ACJV::SetMode(JVS_MODE::DRUM);
-
-						// Taiko's timing and audio are rhythm-critical. The generic System 256
-						// CPU overclock can make drum games feel delayed or desynced on hosts
-						// which cannot sustain the higher emulation rate, so keep the base
-						// System 246 clock while retaining the System 256 memory/profile flags.
-						if (s_acgame_sys256 && PS2CLK != PS2CLK_DEFAULT)
-						{
-							PS2CLK = PS2CLK_DEFAULT;
-							Console.WriteLn(Color_Green, "ACGAME: jvsmode=drum -> using base clock for low-latency Taiko timing");
-						}
-						else
-						{
-							Console.WriteLn(Color_Green, "ACGAME: jvsmode=drum");
-						}
+						Console.WriteLn(Color_Green, "ACGAME: jvsmode=drum");
 					}
 					else
 						ACJV::SetMode(JVS_MODE::DEFAULT);
