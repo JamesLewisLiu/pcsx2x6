@@ -379,7 +379,7 @@ static u16 m_jvsDrumChannels[JVS_DRUM_CHANNEL_MAX] = {};
 static bool m_jvsDrumPressed[JVS_DRUM_CHANNEL_MAX] = {};
 static u8 m_jvsDrumPulseReads[JVS_DRUM_CHANNEL_MAX] = {};
 
-static constexpr u8 JVS_DRUM_PULSE_READS = 3;
+static constexpr u8 JVS_DRUM_PULSE_READS = 1;
 static constexpr u16 JVS_DRUM_PRESS_VALUE = 0x3FF << 6; // 10-bit max value, left-aligned in JVS' 16-bit analog word.
 
 // Per-game JVS button mapping for lightgun games, keyed by NM game ID (see issue #9).
@@ -428,8 +428,11 @@ void ACJV::SetButtonState(u32 player, u16 mask, bool pressed)
 	{
 		// Taiko drum inputs are hits, not level-sensitive buttons. Input backends
 		// can deliver fast press/release pairs between two JVS polls, especially
-		// during rolls or simultaneous left/right hits. Latch each rising edge for
-		// a few analog reads so the game cannot miss it, but keep each channel
+		// during rolls or simultaneous left/right hits. Latch each rising edge until
+		// the next analog read so the game cannot miss it, but avoid holding
+		// the hit across multiple polls because Taiko treats that as a long
+		// sensor pulse and debounces following hits, which feels like latency.
+		// Keep each channel
 		// independent so left/right Don or Ka can be hit together.
 		if (pressed && !m_jvsDrumPressed[mask])
 		{
