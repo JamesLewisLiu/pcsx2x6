@@ -838,6 +838,13 @@ void do_jvs_packet(const u8* input, u8* output) {
 			else if(m_jvsMode == JVS_MODE::DRUM)
 			{
 				JVS_ASSERT(channel == JVS_DRUM_CHANNEL_MAX);
+
+				// Taiko polls drum hits through JVS analog reads. Poll host input here,
+				// immediately before returning the analog channels, instead of waiting
+				// for the next EE vsync input poll. This removes up to one frame of
+				// avoidable latency without changing System 256 timing accuracy.
+				InputManager::PollSources();
+
 				for(int i = 0; i < JVS_DRUM_CHANNEL_MAX; i++)
 				{
 					(*output++) = static_cast<u8>(m_jvsDrumChannels[i] >> 8);
