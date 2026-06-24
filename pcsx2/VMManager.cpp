@@ -742,7 +742,10 @@ void VMManager::ApplyGameFixes()
 	if (!s_acgame.empty())
 	{
 		if (const auto* game = GameDatabase::findGame(ACJV::GetGameId()))
+		{
+			game->applyGameFixes(EmuConfig, EmuConfig.EnableGameFixes);
 			game->applyGSHardwareFixes(EmuConfig.GS);
+		}
 	}
 
 	if (!HasBootedELF() && !GSDumpReplayer::IsReplayingDump())
@@ -1396,6 +1399,11 @@ bool VMManager::AutoDetectSource(const std::string& filename, Error* error)
 					{
 						ACJV::SetMode(JVS_MODE::DRUM);
 						Console.WriteLn(Color_Green, "ACGAME: jvsmode=drum");
+					}
+					else if (jvsmode == "racing")
+					{
+						ACJV::SetMode(JVS_MODE::DRIVE);
+						Console.WriteLn(Color_Green, "ACGAME: jvsmode=racing");
 					}
 					else
 						ACJV::SetMode(JVS_MODE::DEFAULT);
